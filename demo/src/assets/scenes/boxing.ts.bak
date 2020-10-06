@@ -1,0 +1,289 @@
+import {
+  Engine, Scene, SceneLoader, UniversalCamera, HemisphericLight, Vector3, Color3,
+  WebXRState, AbstractMesh, Mesh, MeshBuilder,
+  PhysicsImpostor, AmmoJSPlugin, StandardMaterial
+} from '@babylonjs/core'
+import * as Ammo from 'ammo.js'
+
+import { SceneConfig } from 'assets/sceneConfig'
+// interface SceneConfig {
+//   scene: Scene,
+//   xr: WebXRDefaultExperience,
+//   controllers: {'left': AbstractMesh | null, 'right': AbstractMesh | null},
+//   objects: Record<string, Mesh>
+//   virtualprism?: VirtualPrism,
+// }
+
+export interface SceneOptions {
+  worldBox: {x: [number, number], y: [number, number], z: [number, number]},
+  objectRangeX: [number, number],
+  objectRangeY: [number, number],
+  objectOffset: number,
+  objectInterval: number,
+  objectIntervalMultiplier: number,
+}
+
+let config: SceneConfig
+let options: SceneOptions
+let hitMaterial: (fraction: number) => StandardMaterial
+
+// export function setup (setupConfig: SceneConfig, setupOptions: SceneOptions) {
+//   if (!setupConfig) {
+//     throw new Error('Please provide a configuration')
+//   }
+//   if (!setupOptions) {
+//     throw new Error('Please provide options')
+//   }
+//   config = setupConfig
+//   options = setupOptions
+
+//   hitMaterial = (fraction: number) => {
+//     const mat = new StandardMaterial('hitMaterial', config.scene)
+//     mat.alpha = 1
+//     if (fraction > 0.5) {
+//       mat.diffuseColor = new Color3(0.0, fraction, 0.0)
+//     } else {
+//       mat.diffuseColor = new Color3(fraction, 0.0, 0.0)
+//     }
+//     return mat
+//   }
+// }
+
+function isInsideWorldBox (mesh: Mesh) {
+  if (
+    mesh.position.x < options.worldBox.x[0] ||
+      mesh.position.x > options.worldBox.x[1] ||
+      mesh.position.y < options.worldBox.y[0] ||
+      mesh.position.y > options.worldBox.y[1] ||
+      mesh.position.z < options.worldBox.z[0] ||
+      mesh.position.z > options.worldBox.z[1]
+  ) {
+    return false
+  }
+  return true
+}
+
+let counter = 0
+function createObject () {
+  const radius = 0.09
+  const volume = 4 / 3 * Math.PI * Math.pow(radius, 3)
+  const sphere = MeshBuilder.CreateSphere('sphere', { diameter: radius * 2 }, config.scene)
+  sphere.position = new Vector3(
+    Math.random() * (options.objectRangeX[1] - options.objectRangeX[0]) + options.objectRangeX[0] + options.objectOffset,
+    Math.random() * (options.objectRangeY[1] - options.objectRangeY[0]) + options.objectRangeY[0],
+    15)
+
+  sphere.physicsImpostor = new PhysicsImpostor(sphere, PhysicsImpostor.SphereImpostor, { mass: 10 * volume, friction: 0.1, restitution: 1.0 }, config.scene)
+  const linearVelocity = new Vector3(0, 0, -1)
+  sphere.physicsImpostor.setLinearVelocity(linearVelocity)
+  if (config.virtualprism) {
+    if (counter === 5) {
+      config.virtualprism.attachMeshToCamera(sphere, config.virtualprism.suppressedEye)
+    } else {
+      config.virtualprism.setMeshVisibility(sphere, config.virtualprism.virtualprism.dominantEye, Math.random() * 0.3 + 0.1)
+    }
+  }
+
+  config.objects[sphere.id] = sphere
+  config.scene.onBeforeRenderObservable.add(() => {
+    if (!isInsideWorldBox(sphere)) {
+      sphere.dispose()
+      delete config.objects[sphere.id]
+    }
+  })
+
+  const collideFunction = function (collider: PhysicsImpostor, collideAgainst: PhysicsImpostor) {
+    const sphereObserver = config.scene.onAfterRenderObservable.add(() => {
+      const sphereLinearVelocity = collider.getLinearVelocity()
+      if (sphereLinearVelocity && !linearVelocity.equals(sphereLinearVelocity)) {
+        sphere.material = hitMaterial(0.7)
+        config.scene.onAfterRenderObservable.remove(sphereObserver)
+      }
+    })
+  }
+
+  sphere.physicsImpostor.registerOnPhysicsCollide(Object.values(config.controllers).map((controller) => controller!.physicsImpostor!), collideFunction)
+
+  if (counter < 5) counter++
+  else counter = 0
+  // for (const controller of [config.controllers.left, config.controllers.right]) {
+  //   if (controller?.physicsImpostor) {
+  //     sphere.physicsImpostor.registerOnPhysicsCollide(controller.physicsImpostor, collideFunction)
+
+  //     // sphere.physicsImpostor.registerOnPhysicsCollide(controller.physicsImpostor, function (main, collided) {
+  //     //   if (controller.physicsImpostor) {
+  //     //   sphere.physicsImpostor?.unregisterOnPhysicsCollide(controller.physicsImpostor,  function (main, collided) {
+  //     //     ))
+  //     //   }
+  //     //   sphere.dispose()
+  //     //   delete config.objects[sphere.id]
+  //     //   // const sphereObserver = config.scene.onAfterRenderObservable.add(() => {
+  //     //   //   if (sphere.physicsImpostor) {
+  //     //   //     const sphereLinearVelocity = sphere.physicsImpostor.getLinearVelocity()
+  //     //   //     if (sphereLinearVelocity && !linearVelocity.equals(sphereLinearVelocity)) {
+  //     //   //       sphere.material = hitMaterial(Math.max(...[sphereLinearVelocity.x, sphereLinearVelocity.y, sphereLinearVelocity.z]) / 2)
+  //     //   //       config.scene.onAfterRenderObservable.remove(sphereObserver)
+  //     //   //     }
+  //     //   //   }
+  //     //   // })
+  //     //   // const materialObservable = config.scene.onAfterPhysicsObservable.add(() => {
+  //     //   //   if (sphere.physicsImpostor) {
+  //     //   //     const linearVelocity = sphere.physicsImpostor.getLinearVelocity()
+  //     //   //     console.log(linearVelocity)
+  //     //   //     if (linearVelocity) {
+  //     //   //       sphere.material = hitMaterial(Math.max(...[linearVelocity.x, linearVelocity.y, linearVelocity.z]))
+  //     //   //       config.scene.onAfterPhysicsObservable.remove(materialObservable)
+  //     //   //     }
+  //     //   //   }
+  //     //   // })
+  //     // })
+  //   }
+  // }
+
+  // for (const object of Object.values(config.objects)) {
+  //   if (object.physicsImpostor) {
+  //     object.physicsImpostor.registerOnPhysicsCollide(sphere.physicsImpostor, function (main, collided) {
+  //       sphere.dispose()
+  //       delete config.objects[sphere.id]
+  //     })
+  //   }
+  // }
+}
+
+export async function createScene (canvas: HTMLCanvasElement, engine: Engine, sceneOptions: SceneOptions): Promise<SceneConfig> {
+  const scene = new Scene(engine)
+  // Use Ammo physics plugin
+  // @ts-ignore
+  const AmmoLoaded: any = await Ammo()
+
+  // Setup
+  const gravityVector = new Vector3(0, 0, 0)
+  const ammoPlugin = new AmmoJSPlugin(true, AmmoLoaded)
+  scene.enablePhysics(gravityVector, ammoPlugin)
+
+  // Assets
+  const controllers: {
+    'left': AbstractMesh | null
+    'right': AbstractMesh | null
+  } = {
+    left: null,
+    right: null
+  }
+
+  const sides: ['left', 'right'] = ['left', 'right']
+  for (const side of sides) {
+    // SceneLoader.ImportMesh('', '', `models/glove${side}.babylon`, scene, function (newMeshes, particlesystems) {
+    await SceneLoader.ImportMeshAsync(null, '', `models/glove${side}.babylon`, scene).then((result) => {
+      controllers[side] = Mesh.MergeMeshes(result.meshes as Mesh[]) as AbstractMesh
+      if (controllers[side]) {
+        controllers[side]!.setEnabled(false)
+        controllers[side]!.position = new Vector3(0.0, 0.0, 0.0)
+        // Hold controller upside down
+        controllers[side]!.rotation = new Vector3(4 / 4 * Math.PI, 0, 0)
+        controllers[side]!.physicsImpostor = new PhysicsImpostor(controllers[side]!, PhysicsImpostor.MeshImpostor, { mass: 0.0, restitution: 1.0 }, scene)
+      }
+    })
+  }
+
+  hitMaterial = (fraction: number) => {
+    console.log(fraction)
+    const mat = new StandardMaterial('hitMaterial', scene)
+    if (fraction > 0.5) {
+      mat.alpha = 0.5
+      mat.diffuseColor = new Color3(0.0, 1.0, 0.0)
+    } else {
+      mat.alpha = 0.5
+      mat.diffuseColor = new Color3(1.0, 0.0, 0.0)
+    }
+    return mat
+  }
+
+  const camera = new UniversalCamera('UniversalCamera', new Vector3(0, 1.5, 0), scene)
+  camera.setTarget(new Vector3(0, 1.5, 1))
+  if (canvas) {
+    camera.attachControl(canvas, true)
+  }
+  const light = new HemisphericLight('light', new Vector3(0, 1, 0), scene)
+  light.intensity = 0.7
+
+  const environment = scene.createDefaultEnvironment({ skyboxSize: 100 })
+  if (environment) {
+    environment.setMainColor(Color3.FromHexString('#74b9ff'))
+  }
+
+  const xr = await scene.createDefaultXRExperienceAsync({
+    floorMeshes: environment?.ground ? [environment.ground] : undefined,
+    disableTeleportation: true,
+    inputOptions: {
+      doNotLoadControllerMeshes: true
+    }
+  })
+
+  xr.baseExperience.onStateChangedObservable.add((state) => {
+    if (state === WebXRState.IN_XR) {
+      xr.baseExperience.camera.setTransformationFromNonVRCamera(camera, true)
+    }
+  })
+
+  // xr.baseExperience.onInitialXRPoseSetObservable.add((camera, state) => {
+
+  // })
+
+  xr.input.onControllerAddedObservable.add((ctrl) => {
+    ctrl.pointer.dispose()
+    ctrl.onMotionControllerInitObservable.add((motionController) => {
+      const side = motionController.handness
+      if (side === 'left' || side === 'right') {
+        if (controllers[side] && ctrl.grip) {
+          controllers[side]!.parent = ctrl.grip
+          controllers[side]!.setEnabled(true)
+        }
+      }
+    })
+  })
+
+  xr.input.onControllerRemovedObservable.add((ctrl) => {
+    const side = ctrl.motionController?.handness
+    if (side === 'left' || side === 'right') {
+      if (controllers[side]) {
+          controllers[side]!.parent = null
+      }
+    }
+  })
+
+  // Local setup
+  const objects: Record<string, Mesh> = {}
+
+  hitMaterial = (fraction: number) => {
+    const mat = new StandardMaterial('hitMaterial', scene)
+    mat.alpha = 1
+    if (fraction > 0.5) {
+      mat.diffuseColor = new Color3(0.0, fraction, 0.0)
+    } else {
+      mat.diffuseColor = new Color3(fraction, 0.0, 0.0)
+    }
+    return mat
+  }
+
+  config = { scene, xr, controllers, objects }
+  options = sceneOptions
+  //
+
+  // Dynamic content
+  let objectInterval = setInterval(createObject, options.objectInterval)
+  setInterval(function () {
+    clearInterval(objectInterval)
+    options.objectIntervalMultiplier = (Math.random() * 0.4) + 0.4
+    objectInterval = setInterval(createObject, options.objectInterval * options.objectIntervalMultiplier)
+    setTimeout(function () {
+      clearInterval(objectInterval)
+      objectInterval = setInterval(createObject, options.objectInterval)
+    }, 5000)
+  }, 30000)
+  setInterval(() => {
+    options.objectOffset = Math.random() * 1 - 0.5
+  }, 10000)
+  //
+
+  return config
+}

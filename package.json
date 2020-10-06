@@ -1,0 +1,37 @@
+{
+  "name": "virtualprism",
+  "description": "Virtual prism for Babylon.js",
+  "version": "0.1.0",
+  "author": "Stefan van Herwijnen",
+  "license": "AGPL-3.0",
+  "main": "dist/index.common.js",
+  "module": "dist/index.esm.js",
+  "typings": "dist/types/",
+  "scripts": {
+    "build": "node --max-old-space-size=8192 ./node_modules/rollup/dist/bin/rollup -c rollup.config.js",
+    "build1": "rollup --config"
+  },
+  "peerDependencies": {
+    "@babylonjs/core": "^4.2.0-beta.12",
+    "@babylonjs/gui": "^4.2.0-beta.12",
+    "@babylonjs/loaders": "^4.2.0-beta.12",
+    "@babylonjs/materials": "^4.2.0-beta.12"
+  },
+  "devDependencies": {
+    "@babylonjs/core": "^4.2.0-beta.12",
+    "@babylonjs/gui": "^4.2.0-beta.12",
+    "@babylonjs/loaders": "^4.2.0-beta.12",
+    "@babylonjs/materials": "^4.2.0-beta.12",
+    "@rollup/plugin-commonjs": "^15.1.0",
+    "@rollup/plugin-html": "^0.2.0",
+    "@rollup/plugin-json": "^4.1.0",
+    "@rollup/plugin-node-resolve": "^9.0.0",
+    "@rollup/plugin-typescript": "^6.0.0",
+    "@types/node": "^14.11.5",
+    "rollup": "^2.28.2",
+    "rollup-plugin-copy": "^3.3.0",
+    "rollup-plugin-exclude-dependencies-from-bundle": "^1.1.14",
+    "rollup-plugin-license": "^2.2.0",
+    "typescript": "^3.7.4"
+  }
+}

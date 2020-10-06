@@ -1,0 +1,2 @@
+declare module 'ammo.js' {
+}
