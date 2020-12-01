@@ -13,6 +13,10 @@ export interface VirtualPrismOptions {
         color: string;
         weight: number;
     };
+    patch: {
+        active: boolean;
+        offset: number;
+    };
 }
 export declare class VirtualPrism {
     virtualprism: VirtualPrismOptions;
@@ -41,6 +45,10 @@ export declare class VirtualPrism {
     private blurObserver;
     private blurWatcherObserver;
     activateBlur(activate?: boolean): void;
+    private activePatch;
+    private patchObserver;
+    private patchWatcherObserver;
+    activatePatch(): void;
     /**
      * Mesh layerMask's last bit is set to 0001 (left) or 0010 (right)
      * @param mesh

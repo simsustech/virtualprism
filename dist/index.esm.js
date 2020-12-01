@@ -50,7 +50,7 @@
 
 import { WebXRState, Quaternion, ImageProcessingConfiguration, ImageProcessingPostProcess, Color4, BlurPostProcess, Vector2 } from '@babylonjs/core';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
-import { TextBlock, Slider, RadioButton, Control, AdvancedDynamicTexture, StackPanel, Checkbox } from '@babylonjs/gui';
+import { TextBlock, Slider, RadioButton, Control, AdvancedDynamicTexture, Rectangle, StackPanel, Checkbox } from '@babylonjs/gui';
 
 class VirtualPrism {
     constructor(scene, xrHelper, options) {
@@ -67,6 +67,10 @@ class VirtualPrism {
             vignette: {
                 color: '#00000000',
                 weight: 0
+            },
+            patch: {
+                active: false,
+                offset: 0
             }
         };
         this.variablePrismStrengthTextblock = { textblock: undefined, plane: undefined, texture: undefined };
@@ -128,7 +132,8 @@ class VirtualPrism {
             vergence: options.vergence,
             blur: options.blur,
             contrast: options.contrast,
-            vignette: options.vignette
+            vignette: options.vignette,
+            patch: options.patch
         };
         this.direction = (options.dominantEye === 'right' ? 1 : -1) * (options.baseHor === 'in' ? 1 : -1);
         // Set layer masks for attaching meshes to camera, left last bit: 1101, right last bit: 1110
@@ -162,7 +167,8 @@ class VirtualPrism {
             vergence: options.vergence,
             blur: options.blur,
             contrast: options.contrast,
-            vignette: options.vignette
+            vignette: options.vignette,
+            patch: options.patch
         };
         this.direction = (options.dominantEye === 'right' ? 1 : -1) * (options.baseHor === 'in' ? 1 : -1);
     }
@@ -171,6 +177,9 @@ class VirtualPrism {
         this.activateBlur();
         this.activateContrast();
         this.activateVignette();
+        if (this.virtualprism.patch.active) {
+            this.activatePatch();
+        }
     }
     deactivate() {
         if (this.virtualPrismObserver) {
@@ -332,6 +341,39 @@ class VirtualPrism {
                 this.scene.onBeforeRenderObservable.remove(this.blurWatcherObserver);
                 if (postProcess) {
                     postProcess.dispose();
+                }
+            }
+        }, 1);
+    }
+    activatePatch() {
+        this.patchObserver = this.xrHelper.onStateChangedObservable.add((state) => {
+            if (state === WebXRState.IN_XR && this.virtualprism.patch.active) {
+                console.log('patch');
+                const activePatch = AdvancedDynamicTexture.CreateFullscreenUI("Patch", true, this.scene);
+                const cameraSide = this.virtualprism.dominantEye;
+                const layerMask = cameraSide === 'left' ? 0x00000001 : 0x00000002;
+                if (activePatch.layer) {
+                    activePatch.layer.layerMask = layerMask;
+                }
+                const rect = new Rectangle();
+                rect.width = "100%";
+                rect.height = "100%";
+                rect.left = `${cameraSide === 'left' ? this.virtualprism.patch.offset : -this.virtualprism.patch.offset}%`;
+                rect.top = "0%";
+                rect.thickness = 0;
+                rect.background = '#000000';
+                activePatch.addControl(rect);
+                this.patchWatcherObserver = this.scene.onBeforeRenderObservable.add((scene, state) => {
+                    const left = `${cameraSide === 'left' ? this.virtualprism.patch.offset : -this.virtualprism.patch.offset}%`;
+                    if (rect && rect.left !== left) {
+                        rect.left = left;
+                    }
+                });
+            }
+            else if (state === WebXRState.NOT_IN_XR) {
+                this.scene.onBeforeRenderObservable.remove(this.patchWatcherObserver);
+                if (this.activePatch) {
+                    this.activePatch.dispose();
                 }
             }
         }, 1);
